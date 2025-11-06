@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sociantra - Social Automation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-10">
+  <div class="max-w-xl mx-auto bg-white shadow-xl rounded-2xl p-6 space-y-6">
+    <h1 class="text-2xl font-bold text-center">Sociantra • LinkedIn Automation</h1>
+
+    <!-- AUTH FORM -->
+    <div id="authSection">
+      <h2 class="text-lg font-semibold">Login / Signup</h2>
+      <input id="name" placeholder="Name" class="border rounded-md w-full p-2 mb-2">
+      <input id="email" placeholder="Email" class="border rounded-md w-full p-2 mb-2">
+      <input id="password" placeholder="Password" type="password" class="border rounded-md w-full p-2 mb-2">
+      <div class="flex gap-3">
+        <button id="signup" class="bg-green-600 text-white w-1/2 py-2 rounded-md">Signup</button>
+        <button id="login" class="bg-blue-600 text-white w-1/2 py-2 rounded-md">Login</button>
+      </div>
+    </div>
+
+    <!-- SOCIAL CONNECT -->
+    <div id="socialSection" class="hidden">
+      <h2 class="text-lg font-semibold">LinkedIn</h2>
+      <button id="connectLinkedIn" class="bg-indigo-600 text-white w-full py-2 rounded-md">Connect LinkedIn</button>
+
+      <textarea id="postText" class="border rounded-md w-full p-2 mt-3" rows="3" placeholder="Write something to post..."></textarea>
+      <button id="postBtn" class="bg-blue-600 text-white w-full py-2 rounded-md mt-2">Post to LinkedIn</button>
+    </div>
+
+    <pre id="output" class="bg-gray-900 text-gray-100 rounded-xl p-4 text-sm min-h-[100px] overflow-auto"></pre>
+  </div>
+
+  <script>
+    const $ = (s) => document.querySelector(s);
+    const log = (msg) => $('#output').textContent = typeof msg === 'string' ? msg : JSON.stringify(msg, null, 2);
+
+    const API_BASE = 'http://localhost:5000';
+    let jwt = localStorage.getItem('SOCIANTRA_JWT') || null;
+
+    const headers = () => ({
+      'Content-Type': 'application/json',
+      ...(jwt ? { Authorization: `Bearer ${jwt}` } : {})
+    });
+
+    function updateUI() {
+      if (jwt) {
+        $('#authSection').classList.add('hidden');
+        $('#socialSection').classList.remove('hidden');
+      } else {
+        $('#authSection').classList.remove('hidden');
+        $('#socialSection').classList.add('hidden');
+      }
+    }
+
+    // --- 🔹 LinkedIn Callback Handling (new) ---
+    async function handleLinkedInCallback() {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+      const state = params.get('state');
+
+      if (code && jwt) {
+        log('Processing LinkedIn callback...');
+        try {
+          const res = await fetch(`${API_BASE}/social/linkedin/callback?code=${code}&state=${state}`, {
+            headers: { Authorization: `Bearer ${jwt}` }
+          });
+          const data = await res.json();
+          if (res.ok) {
+            log('✅ LinkedIn connected successfully!');
+            localStorage.setItem('LINKEDIN_CONNECTED', 'true');
+            window.history.replaceState({}, document.title, window.location.pathname); // clean URL
+          } else {
+            log('❌ LinkedIn connection failed: ' + (data.message || 'Unknown error'));
+          }
+        } catch (e) {
+          console.error(e);
+          log('❌ LinkedIn callback error.');
+        }
+      }
+    }
+    // --- 🔹 End LinkedIn Callback ---
+
+    // Signup
+    $('#signup').onclick = async () => {
+      const res = await fetch(API_BASE + '/auth/signup', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({
+          name: $('#name').value,
+          email: $('#email').value,
+          password: $('#password').value
+        })
+      });
+      const data = await res.json();
+      jwt = data.accessToken;
+      localStorage.setItem('SOCIANTRA_JWT', jwt);
+      log('Signed up successfully!');
+      updateUI();
+    };
+
+    // Login
+    $('#login').onclick = async () => {
+      const res = await fetch(API_BASE + '/auth/login', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({
+          email: $('#email').value,
+          password: $('#password').value
+        })
+      });
+      const data = await res.json();
+      jwt = data.accessToken;
+      localStorage.setItem('SOCIANTRA_JWT', jwt);
+      log('Logged in successfully!');
+      updateUI();
+    };
+
+    // LinkedIn connect
+    $('#connectLinkedIn').onclick = async () => {
+      const res = await fetch(API_BASE + '/social/linkedin/connect', { headers: headers() });
+      const data = await res.json();
+      if (data.authUrl) {
+        window.location.href = data.authUrl;
+      } else log(data);
+    };
+
+    // Post to LinkedIn
+    $('#postBtn').onclick = async () => {
+      const res = await fetch(API_BASE + '/social/linkedin/post', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ text: $('#postText').value })
+      });
+      const data = await res.json();
+      log(data);
+    };
+
+    updateUI();
+    handleLinkedInCallback(); // run callback handler on page load
+  </script>
+</body>
+</html>
