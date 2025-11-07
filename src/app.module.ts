@@ -8,13 +8,14 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { AuthModule } from './modules/auth/auth.module';
-
-
 import { TasksModule } from './modules/tasks/task.module';
 import { TenantModule } from './modules/tenant/tenant.module';
 import { SocialModule } from './modules/social/social.module';
 import { WhatsAppModule } from './modules/whatsapp/whatsapp.module';
 import { InstagramModule } from './modules/instagram/instagram.module';
+import { LinkedInModule } from './modules/linkedin/linkedin.module';
+import { AIModule } from './modules/ai/ai.module';
+import { SchedulerModule } from './modules/scheduler/scheduler.module';
 
 @Module({
   imports: [
@@ -43,7 +44,11 @@ import { InstagramModule } from './modules/instagram/instagram.module';
     AuthModule,
     TasksModule,
     WhatsAppModule,
-    InstagramModule
+    InstagramModule,
+    // LinkedIn Automation modules
+    AIModule,
+    LinkedInModule,
+    SchedulerModule,
   ],
 })
 export class AppModule implements NestModule {
