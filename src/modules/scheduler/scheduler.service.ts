@@ -127,7 +127,7 @@ export class SchedulerService {
   /** Helper: Safely parse cron and return next UTC Date */
   private getNextUTC(cron: string): Date {
     try {
-      const options = { tz: 'UTC' }; // Explicitly use UTC for consistency
+      const options = { tz: 'UTC', currentDate: new Date().toISOString() }; // Use ISO string for consistency
       const interval = cronParser.parse(cron, options);
       const next = interval.next().toDate();
       if (isNaN(next.getTime())) throw new Error('Invalid next run date');
