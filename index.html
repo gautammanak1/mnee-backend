@@ -301,7 +301,7 @@
   <script>
     const $ = (s) => document.querySelector(s);
     const $$ = (s) => document.querySelectorAll(s);
-    const API_BASE = 'https://6w0bt25z-5000.inc1.devtunnels.ms';
+    const API_BASE = 'http://localhost:5000';
     let jwt = localStorage.getItem('SOCIANTRA_JWT') || null;
     let linkedInConnected = false;
 
@@ -674,10 +674,10 @@
 
     // Create schedule
     $('#createScheduleBtn').addEventListener('click', async () => {
-      if (!linkedInConnected) {
-        log('Please connect your LinkedIn account first', 'warning');
-        return;
-      }
+      // if (!linkedInConnected) {
+      //   log('Please connect your LinkedIn account first', 'warning');
+      //   return;
+      // }
 
       const btn = $('#createScheduleBtn');
       const topic = $('#scheduleTopic').value;
@@ -691,7 +691,7 @@
 
       btn.classList.add('loading');
       btn.disabled = true;
-
+console.log({ topic, schedule, includeImage })
       try {
         const res = await fetch(`${API_BASE}/linkedin/schedule`, {
           method: 'POST',

@@ -1,9 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ScheduledPost } from '../linkedin/schemas/scheduled-post.schema';
-import {CronExpressionParser} from 'cron-parser';
+import {CronExpressionParser as cronParser} from 'cron-parser';
 import { AIService } from '../ai/ai.service';
 import { User } from '../user/schemas/user.schema';
 import axios from 'axios';
@@ -19,206 +19,153 @@ export class SchedulerService {
   ) {}
 
   /**
-   * Check and execute scheduled posts every minute
+   * Runs every minute to check and execute scheduled posts
    */
   @Cron(CronExpression.EVERY_MINUTE)
   async handleScheduledPosts() {
-    this.logger.log('Checking for scheduled posts...');
+    this.logger.log('⏰ Checking for scheduled posts...');
 
     try {
-      const now = new Date();
-      const activeSchedules = await this.scheduledPostModel.find({
-        isActive: true,
-      });
-
-      // Use IST (India Standard Time) timezone
-      const timezone = process.env.TZ || 'Asia/Kolkata';
+      const now = new Date(); // UTC in Vercel
+      const activeSchedules = await this.scheduledPostModel.find({ isActive: true });
 
       for (const schedule of activeSchedules) {
         try {
-          // If nextPostAt is not set, initialize it
+          // Initialize nextPostAt if missing
           if (!schedule.nextPostAt) {
-            const interval = CronExpressionParser.parse(schedule.schedule, {
-              currentDate: now,
-              tz: timezone,
-            });
+            const interval = cronParser.parse(schedule.schedule);
             schedule.nextPostAt = interval.next().toDate();
             await schedule.save();
           }
 
-          // Check if it's time to execute (compare UTC times directly)
+          // Compare UTC times directly
           const shouldExecute = schedule.nextPostAt.getTime() <= now.getTime();
 
           this.logger.debug(
-            `Schedule ${schedule._id}: Next post at (UTC): ${schedule.nextPostAt.toISOString()}, Now (UTC): ${now.toISOString()}, Should execute: ${shouldExecute}`
+            `Schedule ${schedule._id}: Next UTC: ${schedule.nextPostAt.toISOString()} | Now: ${now.toISOString()} | Execute: ${shouldExecute}`,
           );
 
-          if (shouldExecute) {
-            this.logger.log(`Executing scheduled post for user ${schedule.userId}, topic: ${schedule.topic}`);
+          if (!shouldExecute) continue;
 
-            try {
-              // Get user and LinkedIn token
-              const user = await this.userModel.findById(schedule.userId);
-              if (!user || !user.connectedAccounts?.linkedin?.accessToken) {
-                this.logger.warn(`User ${schedule.userId} not found or LinkedIn not connected`);
-                continue;
-              }
+          this.logger.log(`🚀 Executing scheduled post for user ${schedule.userId}, topic: ${schedule.topic}`);
 
-              // Generate post content
-              const postContent = await this.aiService.generateLinkedInPostWithImage(
-                schedule.topic,
-                schedule.includeImage,
-              );
-
-              // Combine text and hashtags
-              const fullText = postContent.hashtags.length > 0
-                ? `${postContent.text}\n\n${postContent.hashtags.join(' ')}`
-                : postContent.text;
-
-              // Post to LinkedIn
-              const token = user.connectedAccounts.linkedin.accessToken;
-              const profile = user.connectedAccounts.linkedin.profile;
-              const authorUrn = `urn:li:person:${profile.sub}`;
-
-              if (schedule.includeImage && postContent.imageBuffer) {
-                // Post with image
-                await this.postToLinkedInWithImage(token, authorUrn, fullText, postContent.imageBuffer, profile.sub);
-              } else {
-                // Post text only
-                await this.postToLinkedIn(token, authorUrn, fullText);
-              }
-
-              // Update schedule
-              const nextInterval = CronExpressionParser.parse(schedule.schedule, {
-                currentDate: now,
-                tz: timezone,
-              });
-              schedule.lastPostedAt = now;
-              schedule.nextPostAt = nextInterval.next().toDate();
-              schedule.postCount += 1;
-              await schedule.save();
-              
-              this.logger.log(
-                `Next post scheduled for: ${schedule.nextPostAt.toISOString()} (UTC) / ${schedule.nextPostAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} (IST)`
-              );
-
-              this.logger.log(`Successfully posted scheduled post for user ${schedule.userId}`);
-            } catch (error) {
-              this.logger.error(`Error posting scheduled content for user ${schedule.userId}: ${error.message}`);
-            }
+          // Fetch user and LinkedIn credentials
+          const user = await this.userModel.findById(schedule.userId);
+          if (!user || !user.connectedAccounts?.linkedin?.accessToken) {
+            this.logger.warn(`⚠ User ${schedule.userId} not found or LinkedIn not connected`);
+            continue;
           }
+
+          // Generate post content via AI
+          const postContent = await this.aiService.generateLinkedInPostWithImage(
+            schedule.topic,
+            schedule.includeImage,
+          );
+
+          const fullText =
+            postContent.hashtags.length > 0
+              ? `${postContent.text}\n\n${postContent.hashtags.join(' ')}`
+              : postContent.text;
+
+          const token = user.connectedAccounts.linkedin.accessToken;
+          const profile = user.connectedAccounts.linkedin.profile;
+          const authorUrn = `urn:li:person:${profile.sub}`;
+
+          // Post to LinkedIn
+          if (schedule.includeImage && postContent.imageBuffer) {
+            await this.postToLinkedInWithImage(token, authorUrn, fullText, postContent.imageBuffer, profile.sub);
+          } else {
+            await this.postToLinkedIn(token, authorUrn, fullText);
+          }
+
+          // Compute next execution
+          const nextInterval = cronParser.parse(schedule.schedule);
+          schedule.lastPostedAt = now;
+          schedule.nextPostAt = nextInterval.next().toDate();
+          schedule.postCount += 1;
+          await schedule.save();
+
+          const nextIST = new Date(schedule.nextPostAt.getTime() + 5.5 * 60 * 60 * 1000);
+          this.logger.log(
+            `✅ Next post: ${schedule.nextPostAt.toISOString()} (UTC) / ${nextIST.toLocaleString('en-IN')} (IST)`,
+          );
         } catch (error) {
-          this.logger.error(`Error executing schedule ${schedule._id}: ${error.message}`);
+          this.logger.error(`❌ Error executing schedule ${schedule._id}: ${error.message}`);
         }
       }
     } catch (error) {
-      this.logger.error(`Error in scheduled posts handler: ${error.message}`);
+      this.logger.error(`🔥 Error in handleScheduledPosts: ${error.message}`);
     }
   }
 
   /**
-   * Create a new scheduled post
+   * Create a new scheduled post (frontend endpoint)
    */
-  async createScheduledPost(userId: string, data: {
-    topic: string;
-    schedule: string;
-    includeImage?: boolean;
-    customText?: string;
-  }): Promise<ScheduledPost> {
-    // Parse cron to get next execution time with IST timezone
-    const timezone = process.env.TZ || 'Asia/Kolkata';
-    
-    // Parse cron expression with IST timezone
-    const interval = CronExpressionParser.parse(data.schedule, {
-      tz: timezone,
-    });
-    
-    // Get next execution time (returns UTC Date object representing IST time)
-    const nextPostAt = interval.next().toDate();
-    
-    // Log for verification
-    this.logger.log(
-      `Schedule "${data.schedule}" - Next post: ${nextPostAt.toISOString()} (UTC) = ${nextPostAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} (IST)`
-    );
+  async createScheduledPost(
+    userId: string,
+    data: { topic: string; schedule: string; includeImage?: boolean; customText?: string },
+  ): Promise<ScheduledPost> {
+    try {
+      // Parse cron safely without tz (works on Vercel)
+      const interval = cronParser.parse(data.schedule);
+      const nextUTC = interval.next().toDate();
 
-    const scheduledPost = new this.scheduledPostModel({
-      userId,
-      topic: data.topic,
-      customText: data.customText,
-      schedule: data.schedule,
-      includeImage: data.includeImage || false,
-      isActive: true,
-      nextPostAt,
-      postCount: 0,
-    });
+      // Convert UTC → IST for logging (5.5h offset)
+      const nextIST = new Date(nextUTC.getTime() + 5.5 * 60 * 60 * 1000);
 
-    return scheduledPost.save();
+      this.logger.log(
+        `📅 Schedule "${data.schedule}" → Next UTC: ${nextUTC.toISOString()} | IST: ${nextIST.toLocaleString('en-IN')}`,
+      );
+
+      const scheduledPost = new this.scheduledPostModel({
+        userId,
+        topic: data.topic,
+        customText: data.customText,
+        schedule: data.schedule,
+        includeImage: data.includeImage || false,
+        isActive: true,
+        nextPostAt: nextUTC, // store UTC-safe
+        postCount: 0,
+      });
+
+      return await scheduledPost.save();
+    } catch (error) {
+      this.logger.error(`Invalid cron expression: ${data.schedule} | ${error.message}`);
+      throw new BadRequestException(`Invalid cron expression: ${data.schedule}`);
+    }
   }
 
-  /**
-   * Get all scheduled posts for a user
-   */
   async getScheduledPosts(userId: string): Promise<ScheduledPost[]> {
     return this.scheduledPostModel.find({ userId }).sort({ createdAt: -1 });
   }
 
-  /**
-   * Activate a schedule
-   */
   async activateSchedule(userId: string, scheduleId: string): Promise<ScheduledPost> {
-    const schedule = await this.scheduledPostModel.findOne({
-      _id: scheduleId,
-      userId,
-    });
-
-    if (!schedule) {
-      throw new Error('Schedule not found');
-    }
+    const schedule = await this.scheduledPostModel.findOne({ _id: scheduleId, userId });
+    if (!schedule) throw new BadRequestException('Schedule not found');
 
     schedule.isActive = true;
     if (!schedule.nextPostAt) {
-      const timezone = process.env.TZ || 'Asia/Kolkata';
-      const interval = CronExpressionParser.parse(schedule.schedule, {
-        tz: timezone,
-      });
+      const interval = cronParser.parse(schedule.schedule);
       schedule.nextPostAt = interval.next().toDate();
     }
-    return schedule.save();
+    return await schedule.save();
   }
 
-  /**
-   * Deactivate a schedule
-   */
   async deactivateSchedule(userId: string, scheduleId: string): Promise<ScheduledPost> {
-    const schedule = await this.scheduledPostModel.findOne({
-      _id: scheduleId,
-      userId,
-    });
-
-    if (!schedule) {
-      throw new Error('Schedule not found');
-    }
+    const schedule = await this.scheduledPostModel.findOne({ _id: scheduleId, userId });
+    if (!schedule) throw new BadRequestException('Schedule not found');
 
     schedule.isActive = false;
-    return schedule.save();
+    return await schedule.save();
   }
 
-  /**
-   * Delete a schedule
-   */
   async deleteSchedule(userId: string, scheduleId: string): Promise<void> {
-    const result = await this.scheduledPostModel.deleteOne({
-      _id: scheduleId,
-      userId,
-    });
-
-    if (result.deletedCount === 0) {
-      throw new Error('Schedule not found');
-    }
+    const result = await this.scheduledPostModel.deleteOne({ _id: scheduleId, userId });
+    if (result.deletedCount === 0) throw new BadRequestException('Schedule not found');
   }
 
   /**
-   * Post text to LinkedIn
+   * Post text-only to LinkedIn
    */
   private async postToLinkedIn(token: string, authorUrn: string, text: string): Promise<void> {
     await axios.post(
@@ -232,9 +179,7 @@ export class SchedulerService {
             shareMediaCategory: 'NONE',
           },
         },
-        visibility: {
-          'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC',
-        },
+        visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' },
       },
       {
         headers: {
@@ -247,7 +192,7 @@ export class SchedulerService {
   }
 
   /**
-   * Post to LinkedIn with image
+   * Post to LinkedIn with image upload
    */
   private async postToLinkedInWithImage(
     token: string,
@@ -256,7 +201,6 @@ export class SchedulerService {
     imageBuffer: Buffer,
     userId: string,
   ): Promise<void> {
-    // Upload image
     const registerResponse = await axios.post(
       'https://api.linkedin.com/v2/assets?action=registerUpload',
       {
@@ -264,10 +208,7 @@ export class SchedulerService {
           recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
           owner: `urn:li:person:${userId}`,
           serviceRelationships: [
-            {
-              relationshipType: 'OWNER',
-              identifier: 'urn:li:userGeneratedContent',
-            },
+            { relationshipType: 'OWNER', identifier: 'urn:li:userGeneratedContent' },
           ],
         },
       },
@@ -280,15 +221,13 @@ export class SchedulerService {
       },
     );
 
-    const uploadUrl = registerResponse.data.value.uploadMechanism['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'].uploadUrl;
+    const uploadUrl =
+      registerResponse.data.value.uploadMechanism['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest']
+        .uploadUrl;
     const asset = registerResponse.data.value.asset;
 
-    // Upload image
-    await axios.put(uploadUrl, imageBuffer, {
-      headers: {
-        'Content-Type': 'image/jpeg',
-      },
-    });
+    // Upload image binary
+    await axios.put(uploadUrl, imageBuffer, { headers: { 'Content-Type': 'image/jpeg' } });
 
     // Post with image
     await axios.post(
@@ -300,20 +239,10 @@ export class SchedulerService {
           'com.linkedin.ugc.ShareContent': {
             shareCommentary: { text },
             shareMediaCategory: 'IMAGE',
-            media: [
-              {
-                status: 'READY',
-                media: asset,
-                title: {
-                  text: 'LinkedIn Post Image',
-                },
-              },
-            ],
+            media: [{ status: 'READY', media: asset, title: { text: 'LinkedIn Post Image' } }],
           },
         },
-        visibility: {
-          'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC',
-        },
+        visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' },
       },
       {
         headers: {
