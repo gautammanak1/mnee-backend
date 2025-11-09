@@ -3,7 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ScheduledPost } from '../linkedin/schemas/scheduled-post.schema';
-import { CronExpressionParser as cronParser }from 'cron-parser';
+import { CronExpressionParser as cronParser } from 'cron-parser';
 import { AIService } from '../ai/ai.service';
 import { User } from '../user/schemas/user.schema';
 import axios from 'axios';
@@ -127,7 +127,8 @@ export class SchedulerService {
   /** Helper: Safely parse cron and return next UTC Date */
   private getNextUTC(cron: string): Date {
     try {
-      const interval = cronParser.parse(cron); // no tz → always safe
+      const options = { tz: 'UTC' }; // Explicitly use UTC for consistency
+      const interval = cronParser.parse(cron, options);
       const next = interval.next().toDate();
       if (isNaN(next.getTime())) throw new Error('Invalid next run date');
       return next;
