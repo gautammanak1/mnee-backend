@@ -60,7 +60,25 @@ export class LinkedInService {
       const profileRes = await axios.get('https://api.linkedin.com/v2/userinfo', {
         headers: { Authorization: `Bearer ${access_token}` },
       });
-      const profile = profileRes.data;
+      let profile = profileRes.data;
+
+      // Fetch profile picture if not in userinfo response
+      if (!profile.picture) {
+        try {
+          const pictureRes = await axios.get('https://api.linkedin.com/v2/me?projection=(id,profilePicture(displayImage~:playableStreams))', {
+            headers: { 
+              Authorization: `Bearer ${access_token}`,
+              'X-Restli-Protocol-Version': '2.0.0'
+            },
+          });
+          if (pictureRes.data?.profilePicture?.['displayImage~']?.elements?.[0]?.identifiers?.[0]?.identifier) {
+            profile.picture = pictureRes.data.profilePicture['displayImage~'].elements[0].identifiers[0].identifier;
+          }
+        } catch (err) {
+          // Picture fetch failed, continue without it
+          console.log('Could not fetch LinkedIn profile picture:', err.message);
+        }
+      }
 
       // Extract userId from state (format: linkedin-{userId}-{timestamp})
       const stateParts = state.split('-');
@@ -114,6 +132,30 @@ export class LinkedInService {
       isConnected,
       profile: linkedInAccount?.profile || null,
       expiresAt: linkedInAccount?.expiresAt || null,
+    };
+  }
+
+  /**
+   * Disconnect LinkedIn account
+   */
+  async disconnect(userId: string) {
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Remove LinkedIn connection data
+    if (user.connectedAccounts?.linkedin) {
+      user.connectedAccounts.linkedin = undefined;
+      // Remove the linkedin key entirely
+      const updatedAccounts = { ...user.connectedAccounts };
+      delete updatedAccounts.linkedin;
+      user.connectedAccounts = updatedAccounts;
+      await user.save();
+    }
+
+    return {
+      message: 'LinkedIn account disconnected successfully',
     };
   }
 
@@ -234,6 +276,65 @@ export class LinkedInService {
   }
 
   /**
+   * Post to LinkedIn with base64 image string
+   */
+  async postWithBase64Image(userId: string, text: string, imageBase64: string) {
+    const { token, profile } = await this.getAccessToken(userId);
+    const authorUrn = `urn:li:person:${profile.sub}`;
+
+    try {
+      // Convert base64 to buffer
+      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+      const imageBuffer = Buffer.from(base64Data, 'base64');
+
+      const asset = await this.uploadImageToLinkedIn(token, imageBuffer, profile.sub);
+
+      // Post with image
+      const response = await axios.post(
+        'https://api.linkedin.com/v2/ugcPosts',
+        {
+          author: authorUrn,
+          lifecycleState: 'PUBLISHED',
+          specificContent: {
+            'com.linkedin.ugc.ShareContent': {
+              shareCommentary: { text },
+              shareMediaCategory: 'IMAGE',
+              media: [
+                {
+                  status: 'READY',
+                  media: asset,
+                  title: { text: 'AI Generated Image' },
+                },
+              ],
+            },
+          },
+          visibility: {
+            'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC',
+          },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'X-Restli-Protocol-Version': '2.0.0',
+          },
+        },
+      );
+
+      return {
+        message: '✅ Posted successfully to LinkedIn with image!',
+        content: text,
+        postId: response.data.id,
+      };
+    } catch (error) {
+      console.error('LinkedIn post with image error:', error.response?.data || error.message);
+      throw new InternalServerErrorException(
+        `Failed to post to LinkedIn: ${error.response?.data?.message || error.message}`
+      );
+    }
+  }
+
+  /**
    * Post to LinkedIn with an image
    */
   async postWithImage(userId: string, text: string, imageFile: any) {
@@ -298,6 +399,39 @@ export class LinkedInService {
   /**
    * Generate and post using AI
    */
+  /**
+   * Generate AI post content without posting (for preview/verification)
+   */
+  async generateAIPost(userId: string, topic: string, includeImage: boolean = false, language: string = 'en') {
+    try {
+      // Log for debugging
+      console.log(`[LinkedIn Service] Generating AI post - Topic: "${topic}", Language: ${language}, IncludeImage: ${includeImage}`);
+      
+      // Generate post content
+      const postContent = await this.aiService.generateLinkedInPostWithImage(topic, includeImage, language);
+      
+      // Combine text and hashtags
+      const fullText = postContent.hashtags.length > 0
+        ? `${postContent.text}\n\n${postContent.hashtags.join(' ')}`
+        : postContent.text;
+
+      // Convert image buffer to base64 if exists
+      let imageBase64: string | undefined;
+      if (includeImage && postContent.imageBuffer) {
+        imageBase64 = `data:image/jpeg;base64,${postContent.imageBuffer.toString('base64')}`;
+      }
+
+      return {
+        text: fullText,
+        imageUrl: imageBase64,
+        hashtags: postContent.hashtags,
+      };
+    } catch (error) {
+      console.error('AI post generation error:', error);
+      throw new InternalServerErrorException(`Failed to generate post: ${error.message}`);
+    }
+  }
+
   async postWithAI(userId: string, topic: string, includeImage: boolean = false) {
     try {
       // Generate post content

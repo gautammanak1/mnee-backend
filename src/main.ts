@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { json, urlencoded } from 'express';
 
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -11,6 +12,9 @@ async function bootstrap() {
   
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
+  // Increase body size limit to 50MB for image uploads and large payloads
+  app.use(json({ limit: '50mb' }));
+  app.use(urlencoded({ limit: '50mb', extended: true }));
 
   app.enableCors({
     origin: '*',
