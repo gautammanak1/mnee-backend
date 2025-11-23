@@ -6,10 +6,12 @@ import {
   Query,
   Param,
   Req,
+  Res,
   UseGuards,
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { LinkedInService } from './linkedin.service';
@@ -33,18 +35,19 @@ export class LinkedInController {
 
   @Get('callback')
   @ApiOperation({ summary: 'LinkedIn OAuth callback handler' })
-  async handleCallback(@Query('code') code: string, @Query('state') state: string) {
+  async handleCallback(
+    @Query('code') code: string,
+    @Query('state') state: string,
+    @Res() res: Response,
+  ) {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     try {
-      const result = await this.linkedInService.handleCallback(code, state);
-      return {
-        ...result,
-        redirectUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
-      };
+      await this.linkedInService.handleCallback(code, state);
+      // Redirect to frontend with success
+      return res.redirect(`${frontendUrl}?linkedin=connected`);
     } catch (error) {
-      return {
-        error: error.message,
-        redirectUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/linkedin/error`,
-      };
+      // Redirect to frontend with error
+      return res.redirect(`${frontendUrl}?linkedin=error&message=${encodeURIComponent(error.message)}`);
     }
   }
 
@@ -57,6 +60,15 @@ export class LinkedInController {
     return this.linkedInService.getConnectionStatus(userId);
   }
 
+  @Post('disconnect')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Disconnect LinkedIn account' })
+  async disconnect(@Req() req) {
+    const userId = req.user.userId;
+    return this.linkedInService.disconnect(userId);
+  }
+
   @Post('post')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -64,6 +76,33 @@ export class LinkedInController {
   async postToLinkedIn(@Req() req, @Body() dto: CreateLinkedInPostDto) {
     const userId = req.user.userId;
     return this.linkedInService.postText(userId, dto.text);
+  }
+
+  @Post('generate-ai-post')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Generate AI post content without posting (for preview)' })
+  async generateAIPost(@Req() req, @Body() dto: { topic: string; includeImage?: boolean; language?: string }) {
+    const userId = req.user.userId;
+    const language = dto.language || 'en';
+    
+    // Log for debugging
+    console.log(`[LinkedIn Controller] Received request - Topic: "${dto.topic}", Language: ${language}, IncludeImage: ${dto.includeImage}`);
+    
+    return this.linkedInService.generateAIPost(userId, dto.topic, dto.includeImage || false, language);
+  }
+
+  @Post('post-approved')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Post approved AI-generated content to LinkedIn' })
+  async postApproved(@Req() req, @Body() dto: { text: string; imageUrl?: string }) {
+    const userId = req.user.userId;
+    if (dto.imageUrl) {
+      return this.linkedInService.postWithBase64Image(userId, dto.text, dto.imageUrl);
+    } else {
+      return this.linkedInService.postText(userId, dto.text);
+    }
   }
 
   @Post('post-with-ai')
