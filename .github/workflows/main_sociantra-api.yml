@@ -1,4 +1,4 @@
-name: Deploy to GCP VM
+name: Deploy to GCP
 
 on:
   push:
@@ -9,23 +9,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout Code
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2. Install Node for Build
       - name: Install Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # 3. Install Dependencies & Build
       - name: Install Dependencies & Build
         run: |
           npm install
           npm run build
 
-      # 4. Upload files to VM (exclude .env)
       - name: Upload Files to Server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -33,15 +29,8 @@ jobs:
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_SSH_KEY }}
           source: "./"
-          target: "/home/${{ secrets.VM_USER }}/app/"
-          overwrite: true
-          rm: false
-          exclude: |
-            .env
-            **/.env
-            node_modules/
+          target: "/home/${{ secrets.VM_USER }}/app"
 
-      # 5. Restart Application on VM (uses system Node + PM2)
       - name: Restart App on Server
         uses: appleboy/ssh-action@v0.1.7
         with:
@@ -50,13 +39,5 @@ jobs:
           key: ${{ secrets.VM_SSH_KEY }}
           script: |
             cd /home/${{ secrets.VM_USER }}/app
-
-            # Install server-side node_modules (prod only)
-            /usr/bin/npm install --omit=dev
-
-            # Restart app using PM2 (auto-start if not running)
-            /usr/local/bin/pm2 restart nestapp || \
-            /usr/local/bin/pm2 start dist/main.js --name nestapp
-
-            # Save PM2 state so it auto-starts after reboot
-            /usr/local/bin/pm2 save
+            npm install --omit=dev
+            pm2 restart nestapp || pm2 start dist/main.js --name nestapp
