@@ -1,4 +1,4 @@
-name: Deploy to GCP VM
+name: Deploy to GCP
 
 on:
   push:
@@ -41,3 +41,4 @@ jobs:
             cd /home/${{ secrets.VM_USER }}/app
             npm install --omit=dev
             pm2 restart nestapp || pm2 start dist/main.js --name nestapp
+
