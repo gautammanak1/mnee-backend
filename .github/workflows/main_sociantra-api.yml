@@ -1,66 +1,40 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
-name: Build and deploy Node.js app to Azure Web App - sociantra-api
+name: Deploy to GCP VM
 
 on:
   push:
-    branches:
-      - main
-  workflow_dispatch:
+    branches: ["main"]
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read #This is required for actions/checkout
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Node.js version
-        uses: actions/setup-node@v3
-        with:
-          node-version: '22.x'
-
-      - name: npm install, build
-        run: |
-          npm install
-          npm run build --if-present
-        
-
-      - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v4
-        with:
-          name: node-app
-          path: .
-
   deploy:
     runs-on: ubuntu-latest
-    needs: build
-    permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
 
     steps:
-      - name: Download artifact from build job
-        uses: actions/download-artifact@v4
-        with:
-          name: node-app
-      
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_0C820C22C9FE48AFBB31134CEAD76A0C }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_6DF86764289A4BCC85B8594AB952A205 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_DFE267E4255B42449B2214A938F153A3 }}
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: 'Deploy to Azure Web App'
-        id: deploy-to-webapp
-        uses: azure/webapps-deploy@v3
+      - name: Install Node
+        uses: actions/setup-node@v4
         with:
-          app-name: 'sociantra-api'
-          slot-name: 'Production'
-          package: .
+          node-version: 20
 
-          
+      - name: Install Dependencies & Build
+        run: |
+          npm install
+          npm run build
+
+      - name: Upload Files to VM
+        uses: burnett01/rsync-deployments@v7.0.1
+        with:
+          switches: -avzr --delete
+          remote_path: /home/akchanchal2002/app/
+          remote_host: ${{ secrets.VM_HOST }}
+          remote_user: ${{ secrets.VM_USER }}
+          remote_key: ${{ secrets.VM_SSH_KEY }}
+
+      - name: Restart PM2 on VM
+        run: |
+          ssh -i <(echo "${{ secrets.VM_SSH_KEY }}") -o StrictHostKeyChecking=no ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "
+            cd /home/ubuntu/app &&
+            npm install --omit=dev &&
+            pm2 restart nestapp || pm2 start dist/main.js --name nestapp
+          "
