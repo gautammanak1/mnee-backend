@@ -1,0 +1,32 @@
+services:
+  backend:
+    build: .
+    container_name: sociantra-backend
+    ports:
+      - "8023:8023"
+    environment:
+      - PORT=8023
+      - CONTRACT_ADDRESS=${CONTRACT_ADDRESS}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - LINKEDIN_CLIENT_ID=${LINKEDIN_CLIENT_ID}
+      - LINKEDIN_CLIENT_SECRET=${LINKEDIN_CLIENT_SECRET}
+      - LINKEDIN_REDIRECT_URI=${LINKEDIN_REDIRECT_URI}
+      - LINKEDIN_SCOPE=${LINKEDIN_SCOPE}
+      - MNEE_API_KEY=${MNEE_API_KEY}
+      - MNEE_ENV=${MNEE_ENV:-sandbox}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5500}
+    env_file:
+      - .env
+    volumes:
+      - ./:/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8023/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
