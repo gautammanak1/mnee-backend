@@ -1,0 +1,118 @@
+name: Deploy to Azure
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  AZURE_WEBAPP_NAME: mnee-backend
+  AZURE_RESOURCE_GROUP: mnee-backend-rg
+  AZURE_CONTAINER_REGISTRY: mneebackendacr
+  AZURE_CONTAINER_APP_NAME: mnee-backend-app
+  AZURE_CONTAINER_APP_ENVIRONMENT: mnee-backend-env
+  PYTHON_VERSION: '3.10'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run linting
+        run: |
+          pip install flake8 black
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Test Docker build
+        run: |
+          docker build -t mnee-backend:test .
+
+  deploy-to-azure:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://${{ env.AZURE_CONTAINER_APP_NAME }}.azurecontainerapps.io
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Log in to Azure Container Registry
+        run: |
+          az acr login --name ${{ env.AZURE_CONTAINER_REGISTRY }}
+
+      - name: Build and push Docker image
+        run: |
+          IMAGE_TAG=$(echo ${{ github.sha }} | cut -c1-7)
+          docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.AZURE_WEBAPP_NAME }}:$IMAGE_TAG .
+          docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.AZURE_WEBAPP_NAME }}:latest .
+          docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.AZURE_WEBAPP_NAME }}:$IMAGE_TAG
+          docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.AZURE_WEBAPP_NAME }}:latest
+
+      - name: Deploy to Azure Container Apps
+        run: |
+          IMAGE_TAG=$(echo ${{ github.sha }} | cut -c1-7)
+          az containerapp update \
+            --name ${{ env.AZURE_CONTAINER_APP_NAME }} \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --image ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.AZURE_WEBAPP_NAME }}:$IMAGE_TAG \
+            --set-env-vars \
+              PORT=8023 \
+              CONTRACT_ADDRESS="${{ secrets.CONTRACT_ADDRESS }}" \
+              SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
+              SUPABASE_KEY="${{ secrets.SUPABASE_KEY }}" \
+              SUPABASE_SERVICE_KEY="${{ secrets.SUPABASE_SERVICE_KEY }}" \
+              SUPABASE_JWT_SECRET="${{ secrets.SUPABASE_JWT_SECRET }}" \
+              GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}" \
+              LINKEDIN_CLIENT_ID="${{ secrets.LINKEDIN_CLIENT_ID }}" \
+              LINKEDIN_CLIENT_SECRET="${{ secrets.LINKEDIN_CLIENT_SECRET }}" \
+              LINKEDIN_REDIRECT_URI="${{ secrets.LINKEDIN_REDIRECT_URI }}" \
+              LINKEDIN_SCOPE="${{ secrets.LINKEDIN_SCOPE }}" \
+              MNEE_API_KEY="${{ secrets.MNEE_API_KEY }}" \
+              MNEE_ENV="${{ secrets.MNEE_ENV }}" \
+              FRONTEND_URL="${{ secrets.FRONTEND_URL }}" \
+              AGENT_SEED="${{ secrets.AGENT_SEED }}"
+
+      - name: Verify deployment
+        run: |
+          sleep 30
+          az containerapp show \
+            --name ${{ env.AZURE_CONTAINER_APP_NAME }} \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --query "properties.runningStatus"
+

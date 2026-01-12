@@ -189,6 +189,279 @@ curl -X POST http://localhost:5000/ai/generate-post \
   -d '{"topic": "AI trends 2026", "language": "en"}'
 ```
 
+## ☁️ Azure Deployment
+
+This guide will help you deploy the MNEE Backend to Azure Container Apps using GitHub Actions CI/CD.
+
+### Prerequisites
+
+- Azure account with active subscription
+- Azure CLI installed ([Install Guide](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli))
+- Docker installed
+- GitHub repository with this code
+
+### Option 1: Automated Deployment with GitHub Actions (Recommended)
+
+#### Step 1: Create Azure Resources
+
+1. **Login to Azure**
+```bash
+az login
+```
+
+2. **Set your subscription** (if you have multiple)
+```bash
+az account set --subscription "Your Subscription Name"
+```
+
+3. **Register Required Resource Providers** ⚠️ **IMPORTANT: Run this first!**
+```bash
+# Register all required providers (this may take 1-2 minutes)
+az provider register --namespace Microsoft.ContainerRegistry --wait
+az provider register --namespace Microsoft.App --wait
+az provider register --namespace Microsoft.OperationalInsights --wait
+
+# Verify registration status
+az provider list --query "[?namespace=='Microsoft.ContainerRegistry' || namespace=='Microsoft.App' || namespace=='Microsoft.OperationalInsights'].{Namespace:namespace, State:registrationState}" --output table
+```
+
+**Note:** If you see `MissingSubscriptionRegistration` errors, you must register these providers first.
+
+4. **Create Resource Group**
+```bash
+az group create \
+  --name mnee-backend-rg \
+  --location eastus
+```
+
+5. **Create Azure Container Registry**
+```bash
+az acr create \
+  --resource-group mnee-backend-rg \
+  --name mneebackendacr \
+  --sku Basic \
+  --admin-enabled true
+```
+
+6. **Create Container Apps Environment**
+```bash
+az containerapp env create \
+  --name mnee-backend-env \
+  --resource-group mnee-backend-rg \
+  --location eastus
+```
+
+6. **Create Container App** (initial deployment)
+```bash
+az containerapp create \
+  --name mnee-backend-app \
+  --resource-group mnee-backend-rg \
+  --environment mnee-backend-env \
+  --image mcr.microsoft.com/azuredocs/containerapps-helloworld:latest \
+  --target-port 8023 \
+  --ingress external \
+  --min-replicas 1 \
+  --max-replicas 3 \
+  --cpu 1.0 \
+  --memory 2.0Gi
+```
+
+#### Step 2: Configure GitHub Secrets
+
+Go to your GitHub repository → Settings → Secrets and variables → Actions → New repository secret
+
+Add the following secrets:
+
+**Azure Credentials:**
+```bash
+# Get Azure credentials JSON
+az ad sp create-for-rbac --name "mnee-backend-github" --role contributor \
+  --scopes /subscriptions/{subscription-id}/resourceGroups/mnee-backend-rg \
+  --sdk-auth
+```
+
+Copy the JSON output and save it as `AZURE_CREDENTIALS` secret.
+
+**Application Secrets:**
+- `CONTRACT_ADDRESS` - Your MNEE contract address
+- `SUPABASE_URL` - Your Supabase project URL
+- `SUPABASE_KEY` - Your Supabase anon key
+- `SUPABASE_SERVICE_KEY` - Your Supabase service role key
+- `SUPABASE_JWT_SECRET` - Your Supabase JWT secret
+- `GEMINI_API_KEY` - Your Google Gemini API key
+- `LINKEDIN_CLIENT_ID` - LinkedIn OAuth client ID
+- `LINKEDIN_CLIENT_SECRET` - LinkedIn OAuth client secret
+- `LINKEDIN_REDIRECT_URI` - LinkedIn redirect URI (use your Azure app URL)
+- `LINKEDIN_SCOPE` - LinkedIn OAuth scopes
+- `MNEE_API_KEY` - Your MNEE API key
+- `MNEE_ENV` - `sandbox` or `production`
+- `FRONTEND_URL` - Your frontend URL
+- `AGENT_SEED` - 64-character seed for agent
+
+#### Step 3: Update Workflow Variables
+
+Edit `.github/workflows/azure-deploy.yml` and update these variables if needed:
+
+```yaml
+env:
+  AZURE_WEBAPP_NAME: mnee-backend
+  AZURE_RESOURCE_GROUP: mnee-backend-rg
+  AZURE_CONTAINER_REGISTRY: mneebackendacr
+  AZURE_CONTAINER_APP_NAME: mnee-backend-app
+  AZURE_CONTAINER_APP_ENVIRONMENT: mnee-backend-env
+```
+
+#### Step 4: Push to Main Branch
+
+```bash
+git add .
+git commit -m "Add Azure deployment workflow"
+git push origin main
+```
+
+The GitHub Actions workflow will automatically:
+1. Build and test your code
+2. Build Docker image
+3. Push to Azure Container Registry
+4. Deploy to Azure Container Apps
+
+### Option 2: Manual Azure CLI Deployment
+
+1. **Build and push Docker image**
+```bash
+# Login to ACR
+az acr login --name mneebackendacr
+
+# Build image
+docker build -t mneebackendacr.azurecr.io/mnee-backend:latest .
+
+# Push image
+docker push mneebackendacr.azurecr.io/mnee-backend:latest
+```
+
+2. **Update Container App**
+```bash
+az containerapp update \
+  --name mnee-backend-app \
+  --resource-group mnee-backend-rg \
+  --image mneebackendacr.azurecr.io/mnee-backend:latest \
+  --set-env-vars \
+    PORT=8023 \
+    CONTRACT_ADDRESS="your-contract-address" \
+    SUPABASE_URL="your-supabase-url" \
+    # ... add all other environment variables
+```
+
+### Post-Deployment
+
+1. **Get your app URL**
+```bash
+az containerapp show \
+  --name mnee-backend-app \
+  --resource-group mnee-backend-rg \
+  --query "properties.configuration.ingress.fqdn" -o tsv
+```
+
+2. **Test deployment**
+```bash
+curl https://your-app-url.azurecontainerapps.io/api/health
+```
+
+3. **View logs**
+```bash
+az containerapp logs show \
+  --name mnee-backend-app \
+  --resource-group mnee-backend-rg \
+  --follow
+```
+
+### Updating Environment Variables
+
+To update environment variables after deployment:
+
+```bash
+az containerapp update \
+  --name mnee-backend-app \
+  --resource-group mnee-backend-rg \
+  --set-env-vars \
+    GEMINI_API_KEY="new-key" \
+    SUPABASE_URL="new-url"
+```
+
+### Scaling
+
+```bash
+# Scale to 3 replicas
+az containerapp update \
+  --name mnee-backend-app \
+  --resource-group mnee-backend-rg \
+  --min-replicas 1 \
+  --max-replicas 3
+```
+
+### Monitoring
+
+- **Azure Portal**: Navigate to your Container App → Monitoring
+- **Application Insights**: Enable for detailed telemetry
+- **Logs**: Use `az containerapp logs show` command
+
+### Troubleshooting
+
+**Issue: MissingSubscriptionRegistration Error**
+If you see errors like:
+- `The subscription is not registered to use namespace 'Microsoft.ContainerRegistry'`
+- `Subscription is not registered for the Microsoft.OperationalInsights resource provider`
+
+**Solution:**
+```bash
+# Register all required providers (run this first!)
+az provider register --namespace Microsoft.ContainerRegistry --wait
+az provider register --namespace Microsoft.App --wait
+az provider register --namespace Microsoft.OperationalInsights --wait
+
+# Verify registration
+az provider list --query "[?namespace=='Microsoft.ContainerRegistry' || namespace=='Microsoft.App' || namespace=='Microsoft.OperationalInsights'].{Namespace:namespace, State:registrationState}" --output table
+```
+
+**Note:** Registration can take 1-2 minutes. The `--wait` flag waits until completion.
+
+**Issue: Deployment fails**
+- Check GitHub Actions logs
+- Verify all secrets are set correctly
+- Ensure Azure resources exist
+- Make sure resource providers are registered (see above)
+
+**Issue: App not responding**
+- Check container logs: `az containerapp logs show`
+- Verify environment variables are set
+- Check ingress configuration
+
+**Issue: Image pull fails**
+- Verify ACR credentials
+- Check image exists: `az acr repository list --name mneebackendacr`
+- Ensure Container App has access to ACR
+
+### Cost Optimization
+
+- Use **Consumption Plan** for pay-as-you-go pricing
+- Set appropriate min/max replicas based on traffic
+- Use Basic tier ACR for development
+- Enable auto-scaling based on CPU/memory
+
+### Security Best Practices
+
+1. **Use Managed Identity** for ACR access (already configured in workflow)
+2. **Store secrets in Azure Key Vault** (optional)
+3. **Enable HTTPS only** (default in Container Apps)
+4. **Regularly update base images** in Dockerfile
+5. **Use private endpoints** for production
+
+### Additional Resources
+
+- [Azure Container Apps Documentation](https://docs.microsoft.com/azure/container-apps/)
+- [GitHub Actions for Azure](https://github.com/marketplace?type=actions&query=azure)
+- [Azure CLI Reference](https://docs.microsoft.com/cli/azure/)
+
 ## 🏆 MNEE Hackathon Submission
 
 ### Track: AI & Agent Payments

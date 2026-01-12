@@ -231,7 +231,6 @@ class ImageGenerator:
         
         try:
             import random
-            import datetime
             
             # Add variety to image generation
             styles = [
@@ -286,7 +285,6 @@ Original prompt: {prompt}
 - Style: {selected_style}
 - Color scheme: {selected_colors}
 - Composition: {selected_composition}
-- Current date: {datetime.datetime.now().strftime('%B %Y')}
 
 📐 TECHNICAL REQUIREMENTS:
 - High resolution (2K), crisp and clear visuals
