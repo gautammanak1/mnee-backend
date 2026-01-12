@@ -98,43 +98,6 @@ class PaymentService:
             # Try to extract error details from exception
             error_code = ""
             error_message = error_msg
-    
-    async def refund_payment(self, user_id: str, tx_hash: str, service: str, reason: str = "Service failed") -> Dict:
-        """Mark a payment for refund when service fails
-        
-        Note: Actual refund processing should be handled separately via MNEE API.
-        This method records the refund request and updates payment status.
-        """
-        if not self.supabase_admin:
-            return {"success": False, "error": "Database not configured"}
-        
-        try:
-            # Find the payment record
-            payment_result = self.supabase_admin.table("payments").select("*").eq("user_id", user_id).eq("tx_hash", tx_hash).eq("service", service).order("created_at", desc=True).limit(1).execute()
-            
-            if not payment_result.data or len(payment_result.data) == 0:
-                return {"success": False, "error": "Payment record not found"}
-            
-            payment = payment_result.data[0]
-            
-            # Update payment status to "refund_pending"
-            update_result = self.supabase_admin.table("payments").update({
-                "status": "refund_pending",
-                "refund_reason": reason,
-                "refund_requested_at": datetime.now(timezone.utc).isoformat()
-            }).eq("id", payment.get("id")).execute()
-            
-            if update_result.data and len(update_result.data) > 0:
-                return {
-                    "success": True,
-                    "message": "Payment marked for refund. Refund will be processed within 2-3 business days.",
-                    "payment_id": payment.get("id"),
-                    "refund_status": "pending"
-                }
-            
-            return {"success": False, "error": "Failed to update payment status"}
-        except Exception as e:
-            return {"success": False, "error": f"Failed to process refund request: {str(e)}"}
             
             # Check if error has dict-like structure in args
             if hasattr(e, 'args') and len(e.args) > 0:
@@ -194,6 +157,43 @@ class PaymentService:
                     pass
             
             return {"success": False, "error": f"Database error: {error_msg}"}
+    
+    async def refund_payment(self, user_id: str, tx_hash: str, service: str, reason: str = "Service failed") -> Dict:
+        """Mark a payment for refund when service fails
+        
+        Note: Actual refund processing should be handled separately via MNEE API.
+        This method records the refund request and updates payment status.
+        """
+        if not self.supabase_admin:
+            return {"success": False, "error": "Database not configured"}
+        
+        try:
+            # Find the payment record
+            payment_result = self.supabase_admin.table("payments").select("*").eq("user_id", user_id).eq("tx_hash", tx_hash).eq("service", service).order("created_at", desc=True).limit(1).execute()
+            
+            if not payment_result.data or len(payment_result.data) == 0:
+                return {"success": False, "error": "Payment record not found"}
+            
+            payment = payment_result.data[0]
+            
+            # Update payment status to "refund_pending"
+            update_result = self.supabase_admin.table("payments").update({
+                "status": "refund_pending",
+                "refund_reason": reason,
+                "refund_requested_at": datetime.now(timezone.utc).isoformat()
+            }).eq("id", payment.get("id")).execute()
+            
+            if update_result.data and len(update_result.data) > 0:
+                return {
+                    "success": True,
+                    "message": "Payment marked for refund. Refund will be processed within 2-3 business days.",
+                    "payment_id": payment.get("id"),
+                    "refund_status": "pending"
+                }
+            
+            return {"success": False, "error": "Failed to update payment status"}
+        except Exception as e:
+            return {"success": False, "error": f"Failed to process refund request: {str(e)}"}
 
     async def verify_and_record_payment(self, user_id: str, tx_id: str, amount: str, service: str = "dashboard_access") -> Dict:
         """Verify MNEE payment transaction using MNEE SDK API

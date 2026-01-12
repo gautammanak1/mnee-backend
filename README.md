@@ -362,6 +362,8 @@ az containerapp show \
   --query "properties.configuration.ingress.fqdn" -o tsv
 ```
 
+**Output:** `https://mnee-backend-app.xyz123.azurecontainerapps.io`
+
 2. **Test deployment**
 ```bash
 curl https://your-app-url.azurecontainerapps.io/api/health
@@ -374,6 +376,17 @@ az containerapp logs show \
   --resource-group mnee-backend-rg \
   --follow
 ```
+
+### 🔗 Backend URL Setup (Frontend & LinkedIn)
+
+**Important:** Backend URL ko frontend aur LinkedIn mein add karna zaroori hai!
+
+📖 **Complete guide:** See `BACKEND_URL_SETUP.md` for detailed instructions.
+
+**Quick Steps:**
+1. **Frontend:** `.env.local` mein `NEXT_PUBLIC_API_BASE=https://your-backend-url.azurecontainerapps.io` add karein
+2. **LinkedIn:** Developer Portal mein redirect URI add karein: `https://your-backend-url.azurecontainerapps.io/api/linkedin/callback`
+3. **Backend:** Environment variable update: `LINKEDIN_REDIRECT_URI=https://your-backend-url.azurecontainerapps.io/api/linkedin/callback`
 
 ### Updating Environment Variables
 

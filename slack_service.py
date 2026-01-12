@@ -1,4 +1,6 @@
 """Slack integration service for OAuth and bot functionality"""
+# NOTE: Slack functionality is currently disabled/coming soon
+# This file is kept for future implementation
 import os
 import aiohttp
 from typing import Dict, Optional
@@ -7,6 +9,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Slack environment variables (commented out - not in use)
+# SLACK_CLIENT_ID = os.getenv("SLACK_CLIENT_ID", "")
+# SLACK_CLIENT_SECRET = os.getenv("SLACK_CLIENT_SECRET", "")
+# SLACK_REDIRECT_URI = os.getenv("SLACK_REDIRECT_URI", "")
+# SLACK_SCOPES = os.getenv("SLACK_SCOPES", "")
+# SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN", "")
+# SLACK_SIGNING_SECRET = os.getenv("SLACK_SIGNING_SECRET", "")
+# SLACK_APP_TOKEN = os.getenv("SLACK_APP_TOKEN", "")
+# SLACK_VERIFICATION_TOKEN = os.getenv("SLACK_VERIFICATION_TOKEN", "")
+# SLACK_TEAM_ID = os.getenv("SLACK_TEAM_ID", "")
 
 
 class SlackService:
@@ -15,15 +27,16 @@ class SlackService:
     def __init__(self, supabase_client=None, supabase_admin=None):
         self.supabase_client = supabase_client
         self.supabase_admin = supabase_admin or supabase_client
-        self.client_id = SLACK_CLIENT_ID
-        self.client_secret = SLACK_CLIENT_SECRET
-        self.redirect_uri = SLACK_REDIRECT_URI
-        self.scopes = SLACK_SCOPES
-        self.bot_token = SLACK_BOT_TOKEN
-        self.signing_secret = SLACK_SIGNING_SECRET
-        self.app_token = SLACK_APP_TOKEN
-        self.verification_token = SLACK_VERIFICATION_TOKEN
-        self.team_id = SLACK_TEAM_ID
+        # Slack functionality disabled - returning empty/default values
+        self.client_id = os.getenv("SLACK_CLIENT_ID", "")
+        self.client_secret = os.getenv("SLACK_CLIENT_SECRET", "")
+        self.redirect_uri = os.getenv("SLACK_REDIRECT_URI", "")
+        self.scopes = os.getenv("SLACK_SCOPES", "")
+        self.bot_token = os.getenv("SLACK_BOT_TOKEN", "")
+        self.signing_secret = os.getenv("SLACK_SIGNING_SECRET", "")
+        self.app_token = os.getenv("SLACK_APP_TOKEN", "")
+        self.verification_token = os.getenv("SLACK_VERIFICATION_TOKEN", "")
+        self.team_id = os.getenv("SLACK_TEAM_ID", "")
     
     def generate_auth_url(self, user_id: str, team_id: Optional[str] = None) -> Dict:
         """Generate Slack OAuth URL
