@@ -3,6 +3,11 @@
 **🏆 Built for MNEE Hackathon: Programmable Money for Agents, Commerce, and Automated Finance**  
 **Track:** AI & Agent Payments and Commerce | **Contract:** `0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF` | **Deadline:** January 13, 2026
 
+## 📦 Repositories
+
+- **Backend:** [https://github.com/gautammanak1/mnee-backend](https://github.com/gautammanak1/mnee-backend)
+- **Frontend:** [https://github.com/gautammanak1/mnee-frontend](https://github.com/gautammanak1/mnee-frontend)
+
 ## 🚀 Overview
 
 Sociantra is an AI-powered social media automation platform that helps entrepreneurs, agencies, and businesses create and manage LinkedIn content 10x faster. Built with MNEE stablecoin integration for seamless micropayments.
