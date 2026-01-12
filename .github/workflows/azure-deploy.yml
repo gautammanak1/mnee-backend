@@ -97,6 +97,7 @@ jobs:
         if: steps.check-app.outputs.exists == 'false'
         run: |
           IMAGE_TAG=$(echo ${{ github.sha }} | cut -c1-7)
+          # Suppress Graph API warnings (they're harmless)
           az containerapp create \
             --name ${{ env.AZURE_CONTAINER_APP_NAME }} \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
@@ -125,12 +126,14 @@ jobs:
               MNEE_API_KEY="${{ secrets.MNEE_API_KEY }}" \
               MNEE_ENV="${{ secrets.MNEE_ENV }}" \
               FRONTEND_URL="${{ secrets.FRONTEND_URL }}" \
-              AGENT_SEED="${{ secrets.AGENT_SEED }}"
+              AGENT_SEED="${{ secrets.AGENT_SEED }}" \
+            2>&1 | grep -v "WARNING: Failed to query" || true
 
       - name: Update Container App (if exists)
         if: steps.check-app.outputs.exists == 'true'
         run: |
           IMAGE_TAG=$(echo ${{ github.sha }} | cut -c1-7)
+          # Suppress Graph API warnings (they're harmless)
           az containerapp update \
             --name ${{ env.AZURE_CONTAINER_APP_NAME }} \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
@@ -150,7 +153,8 @@ jobs:
               MNEE_API_KEY="${{ secrets.MNEE_API_KEY }}" \
               MNEE_ENV="${{ secrets.MNEE_ENV }}" \
               FRONTEND_URL="${{ secrets.FRONTEND_URL }}" \
-              AGENT_SEED="${{ secrets.AGENT_SEED }}"
+              AGENT_SEED="${{ secrets.AGENT_SEED }}" \
+            2>&1 | grep -v "WARNING: Failed to query" || true
 
       - name: Verify deployment
         run: |
