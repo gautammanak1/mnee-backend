@@ -84,7 +84,51 @@ jobs:
           docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.AZURE_WEBAPP_NAME }}:$IMAGE_TAG
           docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.AZURE_WEBAPP_NAME }}:latest
 
-      - name: Deploy to Azure Container Apps
+      - name: Check if Container App exists
+        id: check-app
+        run: |
+          if az containerapp show --name ${{ env.AZURE_CONTAINER_APP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} &>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Container App (if not exists)
+        if: steps.check-app.outputs.exists == 'false'
+        run: |
+          IMAGE_TAG=$(echo ${{ github.sha }} | cut -c1-7)
+          az containerapp create \
+            --name ${{ env.AZURE_CONTAINER_APP_NAME }} \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --environment ${{ env.AZURE_CONTAINER_APP_ENVIRONMENT }} \
+            --image ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.AZURE_WEBAPP_NAME }}:$IMAGE_TAG \
+            --target-port 8023 \
+            --ingress external \
+            --min-replicas 1 \
+            --max-replicas 3 \
+            --cpu 1.0 \
+            --memory 2.0Gi \
+            --registry-server ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io \
+            --registry-identity system \
+            --env-vars \
+              PORT=8023 \
+              CONTRACT_ADDRESS="${{ secrets.CONTRACT_ADDRESS }}" \
+              SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
+              SUPABASE_KEY="${{ secrets.SUPABASE_KEY }}" \
+              SUPABASE_SERVICE_KEY="${{ secrets.SUPABASE_SERVICE_KEY }}" \
+              SUPABASE_JWT_SECRET="${{ secrets.SUPABASE_JWT_SECRET }}" \
+              GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}" \
+              LINKEDIN_CLIENT_ID="${{ secrets.LINKEDIN_CLIENT_ID }}" \
+              LINKEDIN_CLIENT_SECRET="${{ secrets.LINKEDIN_CLIENT_SECRET }}" \
+              LINKEDIN_REDIRECT_URI="${{ secrets.LINKEDIN_REDIRECT_URI }}" \
+              LINKEDIN_SCOPE="${{ secrets.LINKEDIN_SCOPE }}" \
+              MNEE_API_KEY="${{ secrets.MNEE_API_KEY }}" \
+              MNEE_ENV="${{ secrets.MNEE_ENV }}" \
+              FRONTEND_URL="${{ secrets.FRONTEND_URL }}" \
+              AGENT_SEED="${{ secrets.AGENT_SEED }}"
+
+      - name: Update Container App (if exists)
+        if: steps.check-app.outputs.exists == 'true'
         run: |
           IMAGE_TAG=$(echo ${{ github.sha }} | cut -c1-7)
           az containerapp update \
