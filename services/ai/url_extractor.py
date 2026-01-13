@@ -22,7 +22,15 @@ class URLExtractor:
         self.agent_context = agent_context
     
     async def extract_and_convert(self, url: str, include_image: bool = False, language: str = "en") -> Dict:
-        """Extract content from URL and convert to LinkedIn post"""
+        """Extract content from URL and convert to LinkedIn post - Personal, experience-driven - Uses ai_chain"""
+        # Use ai_chain for URL extraction
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+        from chains.ai_chain import AIPostChain
+        
+        ai_chain = AIPostChain()
+        return await ai_chain.extract_url_to_post(url, language)
         try:
             async with aiohttp.ClientSession() as session:
                 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}

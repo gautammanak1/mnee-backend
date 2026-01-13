@@ -226,7 +226,16 @@ class ImageGenerator:
         """
         Generate an image using Gemini API directly and upload to tmpfiles.org.
         Returns the image URL.
+        Uses ai_chain for generation.
         """
+        # Use ai_chain for image generation
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+        from chains.ai_chain import AIPostChain
+        
+        ai_chain = AIPostChain()
+        return await ai_chain.generate_image(prompt, topic)
         agent_ctx = ctx or self.agent_context
         
         try:

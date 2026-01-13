@@ -31,7 +31,7 @@ class PostGenerator:
         self.ai_chain = AIPostChain()
     
     async def generate(self, topic: str, include_hashtags: bool = True, language: str = "en") -> Dict:
-        """Generate a LinkedIn post based on a topic using LangChain"""
+        """Generate a LinkedIn post based on a topic using LangChain - Personal, experience-driven"""
         # Use LangChain chain - REQUIRED
         result = await self.ai_chain.generate_post(topic, language)
         if result.get("success"):
@@ -231,9 +231,14 @@ Format your response as JSON:
             return {"error": f"Failed to generate LinkedIn post: {str(e)}"}
     
     async def generate_image_prompt(self, topic: str) -> str:
-        """Generate a unique, varied image description/prompt for the topic"""
+        """Generate a unique, varied image description/prompt for the topic - Uses ai_chain"""
+        # Use ai_chain to generate image
+        image_url = await self.ai_chain.generate_image(f"Professional technical image for LinkedIn post about {topic}", topic)
+        if image_url:
+            return image_url
+        
+        # Fallback to simple prompt
         import random
-        import datetime
         
         # Add variety to image prompts
         styles = [
