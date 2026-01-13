@@ -54,7 +54,7 @@ class URLExtractor:
             }
             language_name = language_map.get(language, 'English')
             
-            prompt = f"""Based on the following content extracted from a URL, create an engaging LinkedIn post.
+            prompt = f"""Based on the following content extracted from a URL, create an engaging TECHNICAL LinkedIn post.
 
 Source URL: {url}
 Source Title: {title or "N/A"}
@@ -62,16 +62,27 @@ Source Title: {title or "N/A"}
 Content:
 {text_content[:3000]}
 
-Create a professional LinkedIn post that:
-1. Summarizes the key points from this content
-2. Adds value with insights or commentary
-3. Is engaging and suitable for LinkedIn audience
+Create a professional TECHNICAL LinkedIn post that:
+1. Summarizes the key TECHNICAL points from this content
+2. Adds value with technical insights, commentary, or professional analysis
+3. Is engaging and suitable for LinkedIn audience (tech professionals, content creators, business leaders)
 4. Includes relevant hashtags (3-5)
 5. Is written COMPLETELY in {language_name}
+6. DO NOT mention dates, years, or time-specific references
+7. START DIRECTLY with the post content - no meta-commentary or introductions
+8. Focus on technical depth, actionable insights, and professional value
+9. Use markdown formatting: **bold**, *italics*, [links](URL), `code` for technical terms
+
+CRITICAL OUTPUT RULES:
+- START DIRECTLY with the post content (first sentence/hook)
+- DO NOT write "Here's a LinkedIn post..." or "Here's a summary..." or any meta-commentary
+- DO NOT explain what you're creating
+- Write as if you're posting directly on LinkedIn
+- The first word should be the actual post content, not an introduction
 
 Return JSON format:
 {{
-  "text": "the post content here written COMPLETELY in {language_name}",
+  "text": "the post content here written COMPLETELY in {language_name}, starting directly with the content (no introductions)",
   "hashtags": ["#hashtag1", "#hashtag2", ...]
 }}"""
 

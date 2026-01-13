@@ -127,19 +127,23 @@ class AIPostChain:
             if USE_CREATE_AGENT and create_agent:
                 # Use create_agent for langchain 1.2.0+
                 prompt = ChatPromptTemplate.from_messages([
-                    ("system", """You are an expert LinkedIn content creator. Generate LinkedIn posts directly - NO INTRODUCTORY TEXT, NO META-COMMENTARY.
+                    ("system", """You are an expert LinkedIn content creator specializing in technical and professional content. Generate LinkedIn posts directly - NO INTRODUCTORY TEXT, NO META-COMMENTARY.
 
 CRITICAL RULES:
 - DO NOT write "Here's a LinkedIn post..." or "Here's a draft..." or any similar meta-commentary
 - DO NOT explain what you're creating or describe the post
 - START IMMEDIATELY with the actual post content (hook, first sentence, etc.)
 - Write as if you're posting directly on LinkedIn
+- DO NOT mention dates, years, or time-specific references
 
 CONTENT GUIDELINES:
-- Always use web_search tool to get current, factual information
+- Always use web_search tool to get current, factual, and technical information
 - Include sources and links in markdown format: [Source Name](URL)
-- Write in a professional yet engaging tone
-- Start directly with the post content, no introductions"""),
+- Write in a professional yet engaging tone with technical depth
+- Focus on technical insights, professional value, and actionable content
+- Use code formatting (`backticks`) for technical terms, tools, or technologies
+- Start directly with the post content, no introductions
+- Prioritize technical accuracy and professional expertise"""),
                     ("human", "{input}"),
                 ])
                 
@@ -201,26 +205,29 @@ CONTENT GUIDELINES:
     
     async def _generate_direct_fallback(self, topic: str, language_name: str) -> Dict:
         """Fallback: Direct API generation when LangChain agent unavailable"""
-        prompt = f"""You are an expert LinkedIn content creator. Generate a LinkedIn post directly - NO INTRODUCTORY TEXT, NO META-COMMENTARY.
+        prompt = f"""You are an expert LinkedIn content creator specializing in technical and professional content. Generate a LinkedIn post directly - NO INTRODUCTORY TEXT, NO META-COMMENTARY.
 
 🚨 CRITICAL: START DIRECTLY WITH THE POST CONTENT 🚨
 - DO NOT write "Here's a LinkedIn post..." or "Here's a draft..." or any similar meta-commentary
 - DO NOT explain what you're creating or describe the post
 - START IMMEDIATELY with the actual post content (hook, first sentence, etc.)
 - Write as if you're posting directly on LinkedIn
+- DO NOT mention dates, years, or time-specific references
 
 TOPIC: "{topic}"
 LANGUAGE: {language_name}
 
 CONTENT REQUIREMENTS:
-- Use googleSearch tool to find REAL, CURRENT information
-- Include actual companies, products, services, or facts
-- Use markdown formatting: **bold**, *italics*, [links](URL)
+- Use googleSearch tool to find REAL, CURRENT, and TECHNICAL information
+- Include actual companies, products, technologies, services, or technical facts
+- Focus on technical depth and professional insights
+- Use markdown formatting: **bold**, *italics*, [links](URL), `code` for technical terms
 - Include 3-5 relevant hashtags
 - Write 200-300 words
 - Start with a hook
-- End with a question
-- Include real sources in markdown: [Source](URL)"""
+- End with a question or call-to-action
+- Include real sources in markdown: [Source](URL)
+- Prioritize actionable technical content and professional value"""
         
         async with aiohttp.ClientSession() as session:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={self.gemini_api_key}"
@@ -273,7 +280,6 @@ CONTENT REQUIREMENTS:
         """Generate post using LangChain agent"""
         try:
             import random
-            import datetime
             
             # Add variety to prompts
             hooks = [
@@ -307,13 +313,10 @@ CONTENT REQUIREMENTS:
             selected_structure = random.choice(structures)
             selected_cta = random.choice(ctas)
             
-            current_year = datetime.datetime.now().year
-            
-            input_text = f"""You are an expert LinkedIn content creator. Generate a LinkedIn post directly - NO INTRODUCTORY TEXT, NO META-COMMENTARY.
+            input_text = f"""You are an expert LinkedIn content creator specializing in technical and professional content. Generate a LinkedIn post directly - NO INTRODUCTORY TEXT, NO META-COMMENTARY.
 
 TOPIC: "{topic}"
 LANGUAGE: {language_name}
-CURRENT YEAR: {current_year}
 
 🚨 CRITICAL: START DIRECTLY WITH THE POST CONTENT 🚨
 - DO NOT write "Here's a LinkedIn post..." or "Here's a draft..." or any similar meta-commentary
@@ -324,10 +327,11 @@ CURRENT YEAR: {current_year}
 🎯 CONTENT GENERATION INSTRUCTIONS:
 
 1. **ALWAYS USE WEB SEARCH FIRST**: Use web_search tool to find REAL, CURRENT, and SPECIFIC information about "{topic}"
-   - Search for latest news, trends, companies, products, or facts from {current_year}
+   - Search for latest news, trends, companies, products, or technical facts
    - Find actual examples, case studies, or real-world applications
-   - Get specific data, statistics, or numbers
+   - Get specific data, statistics, or technical details
    - Find unique angles or perspectives that haven't been covered before
+   - Focus on technical depth and professional insights
 
 2. **CONTENT STRUCTURE** (Use this format: {selected_structure}):
    - {selected_hook}
@@ -335,13 +339,13 @@ CURRENT YEAR: {current_year}
    - Use {selected_structure} to organize your content
    - {selected_cta}
 
-3. **MAKE IT UNIQUE**:
+3. **MAKE IT UNIQUE AND TECHNICAL**:
    - Avoid generic advice or common knowledge
    - Use specific examples from web search results
-   - Include real company names, products, or services found in search
+   - Include real company names, products, technologies, or services found in search
    - Add unique perspectives or contrarian viewpoints
-   - Include surprising facts or statistics from search results
-   - Reference recent events or trends from {current_year}
+   - Include surprising facts, statistics, or technical details from search results
+   - Focus on actionable technical insights and professional value
 
 4. **FORMATTING REQUIREMENTS**:
    - Use **bold** for key points and important concepts
@@ -349,10 +353,11 @@ CURRENT YEAR: {current_year}
    - Use bullet points (- or *) for lists
    - Include [source links](URL) in markdown format for all facts/claims
    - Add line breaks between sections for readability
+   - Use code formatting (`backticks`) for technical terms, tools, or technologies
 
 5. **ENGAGEMENT ELEMENTS**:
    - Start with a powerful hook (use {selected_hook})
-   - Include 2-3 relevant emojis strategically placed
+   - Include 2-3 relevant emojis strategically placed (prefer technical/professional emojis)
    - Add 3-5 relevant hashtags at the end
    - Write 200-300 words (optimal LinkedIn length)
    - End with engagement CTA (use {selected_cta})
@@ -362,7 +367,13 @@ CURRENT YEAR: {current_year}
    - Use natural {language_name} expressions and idioms
    - Hashtags should be in {language_name} or universal format
 
-7. **VERIFICATION**:
+7. **TECHNICAL FOCUS**:
+   - Prioritize technical depth over surface-level content
+   - Include specific technologies, frameworks, tools, or methodologies
+   - Provide actionable insights for technical professionals
+   - Use professional terminology appropriate for the audience
+
+8. **VERIFICATION**:
    - ✓ Used web_search tool to get real information
    - ✓ Content is unique and not generic
    - ✓ Includes specific examples from search results
@@ -370,6 +381,7 @@ CURRENT YEAR: {current_year}
    - ✓ Written entirely in {language_name}
    - ✓ Has proper formatting with **bold** and *italics*
    - ✓ Includes emojis and hashtags
+   - ✓ Technical depth and professional value
 
 🚨 OUTPUT FORMAT - CRITICAL 🚨
 - START DIRECTLY with the post content (first sentence/hook)
@@ -378,7 +390,7 @@ CURRENT YEAR: {current_year}
 - Write as if you're posting directly on LinkedIn
 - The first word should be the actual post content, not an introduction
 
-Generate a UNIQUE, ENGAGING LinkedIn post about "{topic}" in {language_name}. Make it stand out with real information from web search. Start directly with the post content - no introductions or meta-commentary."""
+Generate a UNIQUE, ENGAGING, TECHNICAL LinkedIn post about "{topic}" in {language_name}. Make it stand out with real information from web search. Start directly with the post content - no introductions or meta-commentary."""
             
             result = await self.agent.ainvoke({"input": input_text})
             content = result.get("output", "")

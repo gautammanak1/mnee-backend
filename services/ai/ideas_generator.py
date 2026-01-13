@@ -39,30 +39,34 @@ class IdeasGenerator:
             
             context = "\n".join(context_parts) if context_parts else ""
             
-            ai_prompt = f"""You are an expert LinkedIn content strategist specializing in creating viral, engaging posts for content creators, tech professionals, and business leaders.
+            ai_prompt = f"""You are an expert LinkedIn content strategist specializing in creating viral, engaging TECHNICAL posts for content creators, tech professionals, and business leaders.
 
-Generate {count} high-quality LinkedIn post ideas optimized for content creators, tech professionals, and LinkedIn engagement.
+Generate {count} high-quality TECHNICAL LinkedIn post ideas optimized for content creators, tech professionals, and LinkedIn engagement.
 
 Each idea should be:
 - A complete, ready-to-post LinkedIn post (200-300 words)
 - Optimized for LinkedIn's algorithm (engagement-driven, professional yet conversational)
 - Perfect for content creators, tech professionals, and business professionals
-- Actionable and value-driven with specific examples, frameworks, or insights
-- Use storytelling, data, or unique perspectives
+- TECHNICAL and actionable with specific examples, frameworks, tools, technologies, or insights
+- Use storytelling, data, technical depth, or unique perspectives
 - Include relevant hashtags (3-5 per idea)
 - Written completely in {language_name}
+- DO NOT mention dates, years, or time-specific references
 
-Focus areas:
-- Tech trends, AI, software development, startup culture
-- Content creation strategies, personal branding, thought leadership
-- Business growth, productivity, career development
-- Industry insights, case studies, real-world examples
+Focus areas (TECHNICAL EMPHASIS):
+- Tech trends, AI, software development, startup culture, technical tools
+- Content creation strategies with technical depth, personal branding, thought leadership
+- Business growth with technical insights, productivity tools, career development
+- Industry insights, technical case studies, real-world technical examples
+- Programming languages, frameworks, architectures, technical methodologies
+- Technical problem-solving, best practices, technical tutorials
 
 {context}
 
 Return ONLY a JSON array of strings. Each string should be a complete LinkedIn post idea ready to use.
 Format: {{"ideas": ["Complete post idea 1 with hashtags", "Complete post idea 2 with hashtags", ...]}}
-Do NOT return JSON objects with title/content fields. Return simple strings that are complete posts."""
+Do NOT return JSON objects with title/content fields. Return simple strings that are complete posts.
+Each idea should START DIRECTLY with the post content - no meta-commentary or introductions."""
 
             headers = {"Content-Type": "application/json"}
             payload = {"contents": [{"parts": [{"text": ai_prompt}]}]}

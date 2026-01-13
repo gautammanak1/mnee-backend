@@ -274,28 +274,30 @@ class ImageGenerator:
             selected_colors = random.choice(color_schemes)
             selected_composition = random.choice(compositions)
             
-            # Enhance prompt for better, varied image generation
+            # Enhance prompt for better, varied image generation - FOCUS ON TECHNICAL IMAGES
             enhanced_prompt = prompt
             if topic:
-                enhanced_prompt = f"""Create a UNIQUE, professional, high-quality image for a LinkedIn post about "{topic}".
+                enhanced_prompt = f"""Create a UNIQUE, professional, high-quality TECHNICAL image for a LinkedIn post about "{topic}".
 
 Original prompt: {prompt}
 
-🎨 CREATIVE DIRECTION (Make it UNIQUE):
-- Style: {selected_style}
-- Color scheme: {selected_colors}
+🎨 CREATIVE DIRECTION (Make it UNIQUE and TECHNICAL):
+- Style: {selected_style} (prefer technical illustration styles: isometric 3D, flat design with tech icons, modern minimalist with technical elements)
+- Color scheme: {selected_colors} (prefer tech-focused palettes: cool tech colors, dark mode with neon accents, professional blue/white)
 - Composition: {selected_composition}
+- Focus: TECHNICAL and PROFESSIONAL imagery (diagrams, code snippets, technical architecture, data visualizations, tech concepts)
 
 📐 TECHNICAL REQUIREMENTS:
 - High resolution (2K), crisp and clear visuals
-- Professional business aesthetic suitable for LinkedIn
+- Professional TECHNICAL aesthetic suitable for LinkedIn
 - Modern, clean design with excellent composition
 - Visually striking and eye-catching
 - Suitable for social media sharing
 - High contrast for better visibility on LinkedIn feed
-- Engaging and professional appearance
+- Engaging and professional TECHNICAL appearance
 - Avoid cluttered designs - keep it clean and focused
 - Unique visual approach that stands out from generic stock images
+- PRIORITIZE: Technical diagrams, code visualizations, architecture diagrams, data charts, tech icons, professional infographics
 
 🚫 AVOID:
 - Generic stock photo look
@@ -303,12 +305,14 @@ Original prompt: {prompt}
 - Cluttered or busy designs
 - Low contrast or hard-to-read elements
 - Unprofessional or casual styles
+- Non-technical imagery (people, landscapes, abstract art without technical context)
 
-✨ MAKE IT UNIQUE:
-- Use creative visual metaphors related to "{topic}"
-- Incorporate unique design elements
-- Create a memorable visual identity
-- Ensure it's different from typical LinkedIn post images"""
+✨ MAKE IT TECHNICAL AND UNIQUE:
+- Use creative visual metaphors related to "{topic}" with TECHNICAL elements
+- Incorporate technical design elements (code, diagrams, charts, architecture)
+- Create a memorable TECHNICAL visual identity
+- Ensure it's different from typical LinkedIn post images
+- Focus on technical concepts, tools, technologies, or professional insights"""
             
             # Generate image using Gemini API with enhanced prompt
             image_data, content_type = await self._generate_image_with_gemini(enhanced_prompt)
