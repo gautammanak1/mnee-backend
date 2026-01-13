@@ -192,6 +192,16 @@ class GetOccurrencesForDateRESTResponse(Model):
     occurrences: List[Dict[str, Any]] = []  # List of occurrences with schedule and date
     error: Optional[str] = None
 
+class GetApprovalStatusRESTResponse(Model):
+    approved: Optional[bool] = None
+    approved_by: Optional[str] = None
+    approved_at: Optional[str] = None
+    status: Optional[str] = None
+    comments: List[Dict[str, Any]] = []
+    approvals_count: Optional[int] = None
+    total_required: Optional[int] = None
+    error: Optional[str] = None
+
 class ReviewPostRESTRequest(Model):
     token: Optional[str] = None  # Token from review link (optional if in URL path)
     review_token: Optional[str] = None  # Legacy field name

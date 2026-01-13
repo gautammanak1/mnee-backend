@@ -16,6 +16,7 @@ from rest_models import (
     VerifyReviewEmailRESTResponse,
     GetScheduledDatesRESTResponse,
     GetOccurrencesForDateRESTResponse,
+    GetApprovalStatusRESTResponse,
 )
 from utils.auth import _get_user_id_from_token
 
@@ -443,4 +444,37 @@ def register_scheduler_handlers(agent, scheduler_service, payment_service):
             }
         except Exception as e:
             return {"occurrences": [], "error": str(e)}
+    
+    @agent.on_rest_get("/linkedin/schedule/{schedule_id}/approval-status", GetApprovalStatusRESTResponse)
+    async def handle_get_approval_status(ctx: Context) -> Dict[str, Any]:
+        """Get approval status for a scheduled post"""
+        try:
+            user_id = await _get_user_id_from_token(ctx)
+            if not user_id:
+                return {"error": "Authentication required"}
+            
+            # Get schedule_id from path parameter
+            schedule_id = ctx.rest_params.get("schedule_id")
+            if not schedule_id:
+                return {"error": "schedule_id is required"}
+            
+            result = await scheduler_service.get_approval_status(schedule_id)
+            
+            # Verify the schedule belongs to the user
+            if not result.get("error"):
+                import os
+                from supabase import create_client
+                supabase_url = os.getenv("SUPABASE_URL", "")
+                supabase_key = os.getenv("SUPABASE_SERVICE_KEY", "")
+                if supabase_url and supabase_key:
+                    supabase_admin = create_client(supabase_url, supabase_key)
+                    verify_result = supabase_admin.table("scheduled_posts").select("user_id").eq("id", schedule_id).execute()
+                    if verify_result.data and len(verify_result.data) > 0:
+                        if verify_result.data[0].get("user_id") != user_id:
+                            return {"error": "Unauthorized access to schedule"}
+            
+            return result
+        except Exception as e:
+            import traceback
+            return {"error": str(e)}
 
