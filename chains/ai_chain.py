@@ -1,7 +1,13 @@
-"""LangChain integration for AI post generation with tool calling"""
-from typing import Dict, Optional
+"""LangChain integration for AI post generation with tool calling - Handles content, images, ideas, and URL extraction"""
+from typing import Dict, Optional, List, Tuple
 import os
 import aiohttp
+import json
+import re
+import base64
+import random
+from io import BytesIO
+from html import unescape
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -47,7 +53,7 @@ except ImportError:
         pass
 
 class AIPostChain:
-    """LangChain-based AI post generation with web search tool calling"""
+    """LangChain-based AI post generation with web search - Handles content, images, ideas, and URL extraction"""
     
     def __init__(self):
         self.gemini_api_key = os.getenv("GEMINI_API_KEY", "")
@@ -58,10 +64,15 @@ class AIPostChain:
         self.llm = ChatGoogleGenerativeAI(
             model="gemini-2.0-flash",
             google_api_key=self.gemini_api_key,
-            temperature=0.7,
+            temperature=0.8,  # Higher for more creative, personal content
         )
         self.tools = self._create_tools()
         self.agent = self._create_agent()
+        
+        # Image generation settings
+        self.image_model = "gemini-3-pro-image-preview"
+        self.image_api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.image_model}:generateContent"
+        self.tmpfiles_api_url = "https://tmpfiles.org/api/v1/upload"
         
         # Agent can be None if LangChain setup fails - will use fallback in generate_post
     
@@ -127,7 +138,7 @@ class AIPostChain:
             if USE_CREATE_AGENT and create_agent:
                 # Use create_agent for langchain 1.2.0+
                 prompt = ChatPromptTemplate.from_messages([
-                    ("system", """You are an expert LinkedIn content creator specializing in technical and professional content. Generate LinkedIn posts directly - NO INTRODUCTORY TEXT, NO META-COMMENTARY.
+                    ("system", """You are an expert LinkedIn content creator who writes PERSONAL, EXPERIENCE-DRIVEN posts. Generate LinkedIn posts directly - NO INTRODUCTORY TEXT, NO META-COMMENTARY.
 
 CRITICAL RULES:
 - DO NOT write "Here's a LinkedIn post..." or "Here's a draft..." or any similar meta-commentary
@@ -136,14 +147,23 @@ CRITICAL RULES:
 - Write as if you're posting directly on LinkedIn
 - DO NOT mention dates, years, or time-specific references
 
+CONTENT STYLE (PERSONAL & EXPERIENCE-DRIVEN):
+- Write from FIRST-PERSON perspective ("I spent...", "I learned...", "I built...")
+- Share PERSONAL EXPERIENCES and REAL LESSONS LEARNED
+- Make it ACTIONABLE and EXPERIENCE-DRIVEN, not theoretical
+- Use SHORT PARAGRAPHS or bullet points for easy skimming
+- Professional, confident, and insightful tone
+- End with a thoughtful question to encourage engagement
+- Use emojis ONLY where they improve clarity (no overuse)
+
 CONTENT GUIDELINES:
 - Always use web_search tool to get current, factual, and technical information
 - Include sources and links in markdown format: [Source Name](URL)
-- Write in a professional yet engaging tone with technical depth
-- Focus on technical insights, professional value, and actionable content
+- Write in a professional yet conversational tone
+- Focus on actionable insights from real experience
 - Use code formatting (`backticks`) for technical terms, tools, or technologies
 - Start directly with the post content, no introductions
-- Prioritize technical accuracy and professional expertise"""),
+- Share specific examples, numbers, tools, or frameworks you've used"""),
                     ("human", "{input}"),
                 ])
                 
@@ -205,7 +225,7 @@ CONTENT GUIDELINES:
     
     async def _generate_direct_fallback(self, topic: str, language_name: str) -> Dict:
         """Fallback: Direct API generation when LangChain agent unavailable"""
-        prompt = f"""You are an expert LinkedIn content creator specializing in technical and professional content. Generate a LinkedIn post directly - NO INTRODUCTORY TEXT, NO META-COMMENTARY.
+        prompt = f"""You are an expert LinkedIn content creator who writes PERSONAL, EXPERIENCE-DRIVEN posts. Generate a LinkedIn post directly - NO INTRODUCTORY TEXT, NO META-COMMENTARY.
 
 🚨 CRITICAL: START DIRECTLY WITH THE POST CONTENT 🚨
 - DO NOT write "Here's a LinkedIn post..." or "Here's a draft..." or any similar meta-commentary
@@ -217,17 +237,26 @@ CONTENT GUIDELINES:
 TOPIC: "{topic}"
 LANGUAGE: {language_name}
 
+CONTENT STYLE (PERSONAL & EXPERIENCE-DRIVEN):
+- Write from FIRST-PERSON perspective ("I spent...", "I learned...", "I built...")
+- Share PERSONAL EXPERIENCES and REAL LESSONS LEARNED about "{topic}"
+- Make it ACTIONABLE and EXPERIENCE-DRIVEN, not theoretical
+- Use SHORT PARAGRAPHS or bullet points for easy skimming
+- Professional, confident, and insightful tone
+- End with a thoughtful question to encourage engagement
+- Use emojis ONLY where they improve clarity (no overuse or decoration)
+
 CONTENT REQUIREMENTS:
-- Use googleSearch tool to find REAL, CURRENT, and TECHNICAL information
-- Include actual companies, products, technologies, services, or technical facts
-- Focus on technical depth and professional insights
+- Use googleSearch tool to find REAL, CURRENT information about "{topic}"
+- Share 3-5 practical key learnings from your experience
+- Include specific examples, tools, frameworks, or numbers you've used
 - Use markdown formatting: **bold**, *italics*, [links](URL), `code` for technical terms
 - Include 3-5 relevant hashtags
 - Write 200-300 words
-- Start with a hook
-- End with a question or call-to-action
+- Start with a personal hook (e.g., "I spent...", "I learned...")
+- End with a thoughtful question
 - Include real sources in markdown: [Source](URL)
-- Prioritize actionable technical content and professional value"""
+- Focus on actionable insights from real experience"""
         
         async with aiohttp.ClientSession() as session:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={self.gemini_api_key}"
@@ -313,7 +342,7 @@ CONTENT REQUIREMENTS:
             selected_structure = random.choice(structures)
             selected_cta = random.choice(ctas)
             
-            input_text = f"""You are an expert LinkedIn content creator specializing in technical and professional content. Generate a LinkedIn post directly - NO INTRODUCTORY TEXT, NO META-COMMENTARY.
+            input_text = f"""You are an expert LinkedIn content creator who writes PERSONAL, EXPERIENCE-DRIVEN posts. Generate a LinkedIn post directly - NO INTRODUCTORY TEXT, NO META-COMMENTARY.
 
 TOPIC: "{topic}"
 LANGUAGE: {language_name}
@@ -323,74 +352,78 @@ LANGUAGE: {language_name}
 - DO NOT explain what you're creating or describe the post
 - START IMMEDIATELY with the actual post content (hook, first sentence, etc.)
 - Write as if you're posting directly on LinkedIn
+- DO NOT mention dates, years, or time-specific references
 
-🎯 CONTENT GENERATION INSTRUCTIONS:
+🎯 CONTENT STYLE (PERSONAL & EXPERIENCE-DRIVEN):
+- Write from FIRST-PERSON perspective ("I spent...", "I learned...", "I built...")
+- Share PERSONAL EXPERIENCES and REAL LESSONS LEARNED about "{topic}"
+- Make it ACTIONABLE and EXPERIENCE-DRIVEN, not theoretical
+- Use SHORT PARAGRAPHS or bullet points for easy skimming
+- Professional, confident, and insightful tone
+- End with a thoughtful question to encourage engagement
+- Use emojis ONLY where they improve clarity (no overuse or decoration)
 
-1. **ALWAYS USE WEB SEARCH FIRST**: Use web_search tool to find REAL, CURRENT, and SPECIFIC information about "{topic}"
-   - Search for latest news, trends, companies, products, or technical facts
+📝 CONTENT GENERATION INSTRUCTIONS:
+
+1. **ALWAYS USE WEB SEARCH FIRST**: Use web_search tool to find REAL, CURRENT information about "{topic}"
+   - Search for latest trends, tools, frameworks, or best practices
    - Find actual examples, case studies, or real-world applications
    - Get specific data, statistics, or technical details
-   - Find unique angles or perspectives that haven't been covered before
-   - Focus on technical depth and professional insights
+   - Use this information to inform your personal experience narrative
 
-2. **CONTENT STRUCTURE** (Use this format: {selected_structure}):
-   - {selected_hook}
-   - Provide unique insights based on web search results
+2. **SHARE 3-5 PRACTICAL KEY LEARNINGS**:
+   - Each learning should be from YOUR experience
+   - Start each with a personal statement (e.g., "I learned...", "We discovered...", "The biggest surprise was...")
+   - Include specific examples, tools, numbers, or frameworks
+   - Make each learning actionable and practical
    - Use {selected_structure} to organize your content
-   - {selected_cta}
 
-3. **MAKE IT UNIQUE AND TECHNICAL**:
-   - Avoid generic advice or common knowledge
-   - Use specific examples from web search results
-   - Include real company names, products, technologies, or services found in search
-   - Add unique perspectives or contrarian viewpoints
-   - Include surprising facts, statistics, or technical details from search results
-   - Focus on actionable technical insights and professional value
+3. **PERSONAL EXPERIENCE FOCUS**:
+   - Write as if you've actually worked with "{topic}"
+   - Share what surprised you (positive or negative)
+   - Include specific challenges you faced and how you solved them
+   - Mention real tools, frameworks, or technologies you used
+   - Be honest about failures and what you learned from them
 
 4. **FORMATTING REQUIREMENTS**:
    - Use **bold** for key points and important concepts
    - Use *italics* for emphasis or quotes
-   - Use bullet points (- or *) for lists
-   - Include [source links](URL) in markdown format for all facts/claims
-   - Add line breaks between sections for readability
+   - Use bullet points (- or *) for lists and learnings
+   - Use SHORT PARAGRAPHS (2-3 sentences max) for easy skimming
+   - Include [source links](URL) in markdown format for facts/claims
    - Use code formatting (`backticks`) for technical terms, tools, or technologies
 
 5. **ENGAGEMENT ELEMENTS**:
-   - Start with a powerful hook (use {selected_hook})
-   - Include 2-3 relevant emojis strategically placed (prefer technical/professional emojis)
+   - Start with a personal hook (e.g., "I spent...", "I learned...", "Here's what nobody tells you...")
+   - Include 2-3 emojis ONLY where they improve clarity (no decoration)
    - Add 3-5 relevant hashtags at the end
    - Write 200-300 words (optimal LinkedIn length)
-   - End with engagement CTA (use {selected_cta})
+   - End with a thoughtful question (e.g., "What's been your biggest surprise...?", "What tools do you recommend...?")
 
 6. **LANGUAGE REQUIREMENT**:
    - Write ENTIRELY in {language_name} - no English, no code-switching
    - Use natural {language_name} expressions and idioms
    - Hashtags should be in {language_name} or universal format
 
-7. **TECHNICAL FOCUS**:
-   - Prioritize technical depth over surface-level content
-   - Include specific technologies, frameworks, tools, or methodologies
-   - Provide actionable insights for technical professionals
-   - Use professional terminology appropriate for the audience
-
-8. **VERIFICATION**:
-   - ✓ Used web_search tool to get real information
-   - ✓ Content is unique and not generic
-   - ✓ Includes specific examples from search results
-   - ✓ All facts have source links
+7. **VERIFICATION**:
+   - ✓ Written in FIRST-PERSON perspective
+   - ✓ Shares personal experiences and real lessons learned
+   - ✓ Includes 3-5 practical, actionable learnings
+   - ✓ Uses short paragraphs or bullet points
+   - ✓ Professional, confident, and insightful tone
+   - ✓ Ends with thoughtful question
+   - ✓ Emojis used only for clarity, not decoration
    - ✓ Written entirely in {language_name}
-   - ✓ Has proper formatting with **bold** and *italics*
-   - ✓ Includes emojis and hashtags
-   - ✓ Technical depth and professional value
+   - ✓ No dates, years, or time-specific references
 
 🚨 OUTPUT FORMAT - CRITICAL 🚨
 - START DIRECTLY with the post content (first sentence/hook)
-- DO NOT write "Here's a LinkedIn post..." or "Here's a draft..." or "designed to be engaging..." or any meta-commentary
+- DO NOT write "Here's a LinkedIn post..." or "Here's a draft..." or any meta-commentary
 - DO NOT explain what you're creating or describe the post
 - Write as if you're posting directly on LinkedIn
 - The first word should be the actual post content, not an introduction
 
-Generate a UNIQUE, ENGAGING, TECHNICAL LinkedIn post about "{topic}" in {language_name}. Make it stand out with real information from web search. Start directly with the post content - no introductions or meta-commentary."""
+Generate a PERSONAL, EXPERIENCE-DRIVEN LinkedIn post about "{topic}" in {language_name}. Share 3-5 practical key learnings from your experience. Start directly with the post content - no introductions or meta-commentary."""
             
             result = await self.agent.ainvoke({"input": input_text})
             content = result.get("output", "")
